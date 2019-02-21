@@ -247,14 +247,15 @@ class JobsColumn: public Column {
 
         virtual size_t getWidth(HostCache::List const &hosts) const override
         {
-            // We can predict the length of getOutputString so we don't need to
+            // We can predict the unrestricted length of getOutputString so we don't need to
             // create new strings all the time
-            size_t max_width = getHeader().size();
+            size_t header_width = getHeader().size();
+            size_t max_width = header_width;
 
             for (auto const h : hosts)
                 max_width = std::max(max_width, static_cast<size_t>(h->host->getMaxJobs()) + 2);
 
-            return max_width;
+            return std::min(header_width + 10, max_width);
         }
 
         virtual std::string getHeader() const override
@@ -269,7 +270,7 @@ class JobsColumn: public Column {
     protected:
         virtual std::string getOutputString(const std::shared_ptr<const HostCache> &host) const override
         {
-		return m_interface->make_job_graph(host->current_jobs, host->host->getMaxJobs());
+		return m_interface->make_job_graph(host->current_jobs, std::min(getHeader().size() + 8, host->host->getMaxJobs()));
 	}
 
     private:
@@ -418,6 +419,8 @@ std::string NCursesInterface::make_job_graph(Job::Map const &jobs, int max_jobs)
     int cnt = 0;
 
     for (auto const j : jobs) {
+        if (cnt >= max_jobs)
+            break;
         if (!j.second->active)
             continue;
 
@@ -441,7 +444,6 @@ std::string NCursesInterface::make_job_graph(Job::Map const &jobs, int max_jobs)
             c = '=';
         }
         ss << c;
-
         cnt++;
     }
 
