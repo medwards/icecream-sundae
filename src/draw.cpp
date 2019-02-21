@@ -60,7 +60,7 @@ public:
         return anonymize;
     }
 
-    void print_job_graph(Job::Map const &jobs, int max_jobs) const;
+    std::string make_job_graph(Job::Map const &jobs, int max_jobs) const;
 
 private:
     static gboolean on_idle_draw(gpointer user_data);
@@ -247,6 +247,8 @@ class JobsColumn: public Column {
 
         virtual size_t getWidth(HostCache::List const &hosts) const override
         {
+            // We can predict the length of getOutputString so we don't need to
+            // create new strings all the time
             size_t max_width = getHeader().size();
 
             for (auto const h : hosts)
@@ -260,16 +262,15 @@ class JobsColumn: public Column {
             return "JOBS";
         }
 
-        virtual void output(int row, const std::shared_ptr<const HostCache> &host) const override
-        {
-            move(row, m_column);
-            m_interface->print_job_graph(host->current_jobs, host->host->getMaxJobs());
-        }
-
         virtual Compare get_compare() const override
         {
             return compare;
         }
+    protected:
+        virtual std::string getOutputString(const std::shared_ptr<const HostCache> &host) const override
+        {
+		return m_interface->make_job_graph(host->current_jobs, host->host->getMaxJobs());
+	}
 
     private:
         static bool compare(const std::shared_ptr<const HostCache> &a, const std::shared_ptr<const HostCache> &b)
@@ -409,9 +410,10 @@ void NCursesInterface::resume()
     init();
 }
 
-void NCursesInterface::print_job_graph(Job::Map const &jobs, int max_jobs) const
+std::string NCursesInterface::make_job_graph(Job::Map const &jobs, int max_jobs) const
 {
-    addch('[');
+    std::ostringstream ss;
+    ss << '[';
 
     int cnt = 0;
 
@@ -438,15 +440,16 @@ void NCursesInterface::print_job_graph(Job::Map const &jobs, int max_jobs) const
         } else {
             c = '=';
         }
-        addch(c);
+        ss << c;
 
         cnt++;
     }
 
     for (int i = cnt; i < max_jobs; ++i)
-        addch(' ');
+        ss << ' ';
 
-    addch(']');
+    ss << ']';
+    return ss.str();
 }
 
 gboolean NCursesInterface::on_idle_draw(gpointer user_data)
@@ -559,7 +562,7 @@ void NCursesInterface::doRender()
     next_row();
 
     move(row, 6);
-    print_job_graph(Job::allJobs, total_job_slots);
+    addstr(make_job_graph(Job::allJobs, total_job_slots).c_str());
     next_row();
     next_row();
 
